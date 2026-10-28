@@ -7,36 +7,25 @@ _SCENES = {}
 
 
 def _load():
-    if _SCENES:
-        return _SCENES
-    import importlib
-    table = {
-        "boot": ("forecast", "boot"), "forecast": ("forecast", "forecast"), "title": ("title", "title"),
-        "funding": ("funding", "funding"), "melt": ("system", "melt"), "reboot": ("system", "reboot"),
-        "crash": ("system", "crash"), "ocean": ("ocean", "ocean"), "network": ("network", "network"),
-        "finale": ("finale", "finale"), "poweroff": ("finale", "poweroff"),
-    }
-    for name, (mod, fn) in table.items():
-        try:
-            _SCENES[name] = getattr(importlib.import_module("scenes." + mod), fn)
-        except (ImportError, AttributeError):
-            pass
+    # Imported lazily: finale/poweroff call back into this module for flashbacks.
+    if not _SCENES:
+        from scenes import finale, forecast, funding, network, ocean, system, title
+        _SCENES.update({
+            "boot": forecast.boot, "forecast": forecast.forecast, "title": title.title, "funding": funding.funding,
+            "melt": system.melt, "reboot": system.reboot, "crash": system.crash, "ocean": ocean.ocean,
+            "network": network.network, "finale": finale.finale, "poweroff": finale.poweroff,
+        })
     return _SCENES
 
 
 # White flash on these section starts (strength, decay in steps).
-FLASH = {"forecast": (0.9, 10), "title": (1.0, 14), "funding": (0.6, 8), "crash": (0.9, 10), "ocean": (0.5, 12),
-         "network": (0.6, 10), "finale": (1.0, 16)}
+FLASH = {"forecast": (0.9, 6), "title": (1.0, 8), "funding": (0.6, 5), "crash": (0.9, 6), "ocean": (0.5, 8),
+         "network": (0.6, 6), "finale": (1.0, 10)}
 
 
 def draw_section(screen, ctx, name):
     scenes = _load()
-    fn = scenes.get(name)
-    if fn is None:
-        screen.clear()
-        screen.ctext(17, "[ {} ]".format(name), (120, 120, 140))
-        return
-    fn(screen, ctx)
+    scenes[name](screen, ctx)
 
 
 def frame(t, audio):
