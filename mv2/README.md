@@ -52,7 +52,7 @@ otherwise through `ffplay`.
 - `timeline.py` is the shared beat grid: 179 BPM in 1/8-beat steps, offset 5.492 s; event numbers match `credits.py`.
   Quarter-note hits were measured from the audio to fall on steps where `(b - 6) % 8 == 0` (`BEAT_PHASE`).
 - `audio.py` measures loudness, kick / snare hits and a 24-band spectrum per frame; scenes use them for
-  flashes, swell and spectrum bars.
+  flashes, swell and the title oscilloscope.
 - `term.py` is the screen: a 120x36 grid of cells with glyph + RGB colours, plus drawing tools (rounded
   panels, braille 2x4 dot canvas, half-block pixels, gradients, glitch effects).
 - `scenes/` draw one section each. Every frame is drawn from the current time alone, so any moment can be
