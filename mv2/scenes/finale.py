@@ -5,10 +5,10 @@ import numpy as np
 
 import timeline as tl
 from lyrics import stream
-from scenes.common import (AMBER, BG, BLUE, CYAN, DIM, GREEN, MUTED, ORANGE, PINK, RED, VIOLET, WHITE, hint_bar,
+from scenes.common import (AMBER, BG, BLUE, CYAN, DIM, FG, GREEN, MUTED, ORANGE, PINK, RED, VIOLET, WHITE,
                            status_bar)
 from scenes.forecast import bayer
-from term import big_text_mask, gradient, mix
+from term import gradient, mix
 
 HUES = [CYAN, BLUE, VIOLET, PINK, RED, ORANGE, AMBER, GREEN, CYAN]
 LYRICS_END = 6030
@@ -16,10 +16,10 @@ FLASHBACKS = ((520, "forecast"), (1420, "title"), (2260, "funding"), (3250, "reb
               (4150, "ocean"), (5050, "network"), (900, "forecast"), (1600, "title"), (3700, "crash"))
 
 
-def tunnel(s, ctx, y0=1, y1=35, boost=0.0):
+def tunnel(s, ctx, y0=1, y1=35, boost=0.0, freeze=False):
     rows = y1 - y0
     H, W = rows * 4, s.cols * 2
-    t = ctx.t
+    t = tl.beat_time(tl.MOMENTS["tunnel_freeze"][0]) if freeze else ctx.t
     Y, X = np.mgrid[0:H, 0:W].astype(np.float32)
     cx = W / 2 + 18 * math.sin(t * 0.45)
     cy = H / 2 + 8 * math.cos(t * 0.6)
@@ -31,12 +31,14 @@ def tunnel(s, ctx, y0=1, y1=35, boost=0.0):
     v = ang / (2 * math.pi) * 16 + t * 0.3 + 20.0 / r * math.sin(t * 0.7)
     check = 0.5 + 0.5 * np.sin(u * 2 * math.pi) * np.sin(v * 2 * math.pi)
     fade = np.clip((r - 8) / 60, 0, 1) ** 0.9
-    val = np.clip(check * fade * (0.85 + 0.45 * ctx.kick + boost), 0, 1)
+    val = np.clip(check * fade * (0.8 + 0.2 * ctx.kick + boost), 0, 1)
     dots = val > bayer(H, W) * 0.95 + 0.04
     cu = u[:H, :W].reshape(rows, 4, s.cols, 2).mean((1, 3))
     cv = val.reshape(rows, 4, s.cols, 2).mean((1, 3))
     hue = np.mod(cu * 0.03 + t * 0.06, 1.0)
-    col = gradient(HUES, hue) * (0.45 + 0.9 * cv)[..., None]
+    col = gradient(HUES, hue) * (0.3 + 0.55 * cv)[..., None]
+    if freeze:
+        col = np.broadcast_to(WHITE * 0.85, col.shape)
     s.braille(0, y0, dots, np.clip(col, 0, 255))
 
 
@@ -53,48 +55,79 @@ def _flashback(ctx):
     return beat + (lb % period), name, i
 
 
+def _mosaic(s, ctx, p):
+    """Signature moment: four earlier scenes at once, one per quadrant."""
+    from director import frame_at_beat
+    picks = ((900, "forecast"), (2260, "funding"), (4150, "ocean"), (5050, "network"))
+    lb = ctx.b - tl.MOMENTS["mosaic"][0]
+    for q, (beat, name) in enumerate(picks):
+        snap = frame_at_beat(beat + lb, ctx.audio, name)
+        ys = slice(1, 18) if q < 2 else slice(18, 35)
+        xs = slice(0, 60) if q % 2 == 0 else slice(60, 120)
+        s.ch[ys, xs], s.fg[ys, xs], s.bg[ys, xs] = snap.ch[ys, xs], snap.fg[ys, xs] * 0.8, snap.bg[ys, xs]
+    s.text(0, 17, "─" * 120, DIM)
+    s.vline(60, 1, 34, DIM)
+    s.put(60, 17, "┼", DIM)
+
+
+def _spaced(word):
+    return " ".join(word.upper())
+
+
 def finale(s, ctx):
     from director import frame_at_beat
     s.clear(BG)
+    b = ctx.b
+    st0, st1 = stream("fdg_down:0"), stream("fdg_down:1")
+    cur0, cur1 = st0.current(ctx.bi), st1.current(ctx.bi)
+
+    mz = tl.moment("mosaic", b)
+    if mz is not None:
+        _mosaic(s, ctx, mz)
+        status_bar(s, ctx, PINK, extra="replay")
+        return
+
+    vw = tl.moment("viewers", b)
+    if vw is not None:
+        # Signature moment: the tunnel is gone; only the last line of the song is left.
+        s.clear((0, 0, 0))
+        line1 = cur1 or (st1.history(ctx.bi)[-1][1] if st1.history(ctx.bi) else "")
+        s.ctext(16, cur0, DIM)
+        s.ctext(18, line1, WHITE, bold=True)
+        status_bar(s, ctx, PINK)
+        return
+
     fb = _flashback(ctx)
     if fb:
         beat, name, i = fb
         snap = frame_at_beat(beat, ctx.audio, name)
         s.paste(snap)
         tint = HUES[i % len(HUES)]
-        s.fg[:] = s.fg * 0.6 + tint * 0.4 * (s.fg.max(-1, keepdims=True) / 255)
-        s.post["aberr"] = 5
-        s.text(2, 2, " ▶ REPLAY {:02d}:{:05.2f} ".format(int(tl.beat_time(beat) // 60), tl.beat_time(beat) % 60),
-               BG, tint, bold=True)
+        s.fg[:] = s.fg * 0.75 + tint * 0.25 * (s.fg.max(-1, keepdims=True) / 255)
+        s.post["aberr"] = 3
+        s.fill(0, 0, 120, 1, BG)
+        s.text(1, 0, "▶ replay {:02d}:{:05.2f}".format(int(tl.beat_time(beat) // 60), tl.beat_time(beat) % 60), tint)
         return
 
-    tunnel(s, ctx, boost=0.25 if ctx.b >= 6270 else 0.0)
+    freeze = tl.moment("tunnel_freeze", b) is not None
+    tunnel(s, ctx, boost=0.15 if b >= 6270 else 0.0, freeze=freeze)
 
-    st0, st1 = stream("fdg_down:0"), stream("fdg_down:1")
-    cur0, cur1 = st0.current(ctx.bi), st1.current(ctx.bi)
-    if 5788 <= ctx.b < LYRICS_END:
-        s.fill(0, 11, 120, 13, BG * 0.6)
-        s.text(0, 11, "▁" * 120, PINK * 0.5)
-        s.text(0, 23, "▔" * 120, PINK * 0.5)
+    if 5788 <= b < LYRICS_END:
+        # A quiet band: the current word letter-spaced, the line under it.
+        s.fill(0, 13, 120, 9, BG)
+        s.text(0, 13, "─" * 120, DIM * 0.7)
+        s.text(0, 21, "─" * 120, DIM * 0.7)
         words = cur0.split()
         if words:
-            w = words[-1].strip(".,").upper() or words[-1]
-            m = big_text_mask(w, 13)
-            hh, ww = m.shape
-            if ww > 116:
-                m = big_text_mask(w[:10], 13)
-                hh, ww = m.shape
-            xs = np.linspace(0, 1, ww)
-            rgb = np.broadcast_to(gradient([PINK, WHITE, CYAN], np.mod(xs + ctx.t * 0.3, 1))[None], (hh, ww, 3)).copy()
-            s.halfblock(60 - ww // 2, 13, rgb, m)
-        s.ctext(20, cur0, WHITE, bold=True)
+            w = words[-1].strip(".,") or words[-1]
+            s.ctext(15, _spaced(w)[:100], WHITE, bold=True)
+        s.ctext(17, cur0, FG)
         if cur1:
-            s.ctext(22, cur1, PINK)
+            s.ctext(19, cur1, PINK * 0.85)
 
-    if ctx.b >= 6270:
-        s.post["aberr"] = 2 + 3 * ctx.kick
+    if b >= 6270:
+        s.post["aberr"] = 1 + 2 * ctx.kick
     status_bar(s, ctx, PINK)
-    hint_bar(s, ctx, PINK)
 
 
 def poweroff(s, ctx):

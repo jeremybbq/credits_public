@@ -3,8 +3,9 @@ import math
 
 import numpy as np
 
+import timeline as tl
 from lyrics import stream
-from scenes.common import (AMBER, BG, CYAN, DIM, FG, GREEN, HOTRED, MUTED, PANEL, RED, WHITE, hint_bar, input_line,
+from scenes.common import (AMBER, BG, CYAN, DIM, FG, GREEN, HOTRED, MUTED, PANEL, RED, WHITE, input_line,
                            log_panel, progress_bar, spinner, status_bar)
 from term import big_text_mask, mix
 
@@ -36,6 +37,13 @@ def melt(s, ctx):
         return
 
     s.clear(BG)
+    blip = tl.moment("carrier_blip", ctx.b)
+    if blip is not None:
+        # Signature moment: the static drops out and, for a breath, the carrier is there.
+        s.clear((0, 0, 0))
+        s.ctext(17, "◉  57.25 MHz", WHITE if blip < 0.6 else MUTED, bold=True)
+        status_bar(s, ctx, MUTED)
+        return
     rng = ctx.rng(2)
     H, W = s.rows * 4, s.cols * 2
     static = rng.random((H, W)) < 0.22
@@ -49,7 +57,6 @@ def melt(s, ctx):
     s.ctext(16, "◌  no carrier", WHITE, PANEL, bold=True)
     s.ctext(18, "{}  retrying in {:.1f}s".format(spinner(ctx), left), MUTED, PANEL)
     status_bar(s, ctx, MUTED, alert=True)
-    hint_bar(s, ctx, MUTED)
 
 
 # ------------------------------------------------------------------ reboot
@@ -115,7 +122,7 @@ def reboot(s, ctx):
     b = ctx.b
     lb = b - 3132
     fast = b >= 3376
-    s.box(1, 2, 66, 24, DIM, title="journalctl -f", title_fg=GREEN, tag="rx.service", tag_fg=DIM)
+    s.box(1, 2, 66, 24, DIM, title="journalctl -f", title_fg=GREEN)
     n = min(int(lb // 8) + 1, len(BOOT_LOG))
     shown = BOOT_LOG[max(0, n - 22):n]
     for i, (k, msg) in enumerate(shown):
@@ -124,7 +131,7 @@ def reboot(s, ctx):
         s.text(3, 3 + i, tag, c, bold=True)
         s.text(12, 3 + i, msg, WHITE if fresh else (FG if k == "OK" else c * 0.9))
 
-    s.box(68, 2, 51, 24, DIM, title="antenna · searching", title_fg=CYAN, tag="az {:03d}°".format(int(ctx.t * 40) % 360), tag_fg=DIM)
+    s.box(68, 2, 51, 24, DIM, title="antenna · searching", title_fg=CYAN)
     wire_globe(s, ctx, 69, 3, 49, 22, mix(CYAN, WHITE, 0.2 + 0.5 * ctx.kick), DIM * 0.7)
 
     st = stream("loadingbar:6")
@@ -148,7 +155,6 @@ def reboot(s, ctx):
     if fast:
         s.post["flash"] = 0.25 * (1 - p)
     status_bar(s, ctx, GREEN)
-    hint_bar(s, ctx, GREEN)
 
 
 # ------------------------------------------------------------------ crash
@@ -227,8 +233,12 @@ def crash(s, ctx):
     layout = LAYOUTS[k % 4]
     hit = ctx.snare > 0.55
     rng = ctx.rng(21)
-    for i, rect in enumerate(layout):
-        name = PANES[(i + k) % 4]
+    panes = [(PANES[(i + k) % 4], rect) for i, rect in enumerate(layout)]
+    collapse = tl.moment("crash_collapse", ctx.b)
+    if collapse is not None:
+        # Signature moment: everything else is gone, stderr has the whole screen.
+        panes = [("stderr", (0, 1, 120, 34))]
+    for name, rect in panes:
         x, y, w, h = rect
         main = name == "stderr"
         col = WHITE if hit else (HOTRED if main else DIM)
@@ -248,20 +258,21 @@ def crash(s, ctx):
 
     # "| This is PBS!" — the key line lands; it takes the whole screen.
     if ctx.b >= 3877:
-        m = big_text_mask("THIS IS PBS!", 15)
+        m = big_text_mask("THIS IS PBS!", 11)
         hh, ww = m.shape
-        s.fill(0, 9, 120, hh // 2 + 4, mix(BG, HOTRED, 0.25))
+        s.fill(0, 13, 120, hh // 2 + 2, mix(BG, HOTRED, 0.2))
         rgb = np.broadcast_to(WHITE if (ctx.bi // 2) % 2 else HOTRED, (hh, ww, 3)).copy()
-        s.halfblock(60 - ww // 2, 11, rgb, m)
+        s.halfblock(60 - ww // 2, 14, rgb, m)
         s.post["aberr"] = 5
 
     status_bar(s, ctx, HOTRED, alert=True, extra="segfault at 0x0179")
     # tmux status line.
-    s.fill(0, 35, 120, 1, GREEN * 0.75)
+    bar = mix(hexc_bg(), GREEN, 0.15)
+    s.fill(0, 35, 120, 1, bar)
     tabs = "  ".join("{}:{}{}".format(i, n, "*" if n == "stderr" else "") for i, n in enumerate(PANES))
-    s.text(0, 35, " [pbs] " + tabs, BG, GREEN * 0.75, bold=True)
-    right = ' "core.dump" 19:{:02d} 22-Oct-09 '.format(23 + int(ctx.t // 60) % 30)
-    s.text(120 - len(right), 35, right, BG, GREEN * 0.75)
+    s.text(0, 35, " [pbs] " + tabs, GREEN * 0.85, bar)
+    right = ' "core.dump" 22-Oct-09 '
+    s.text(120 - len(right), 35, right, GREEN * 0.6, bar)
 
 
 def hexc_bg():

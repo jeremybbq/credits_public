@@ -1,16 +1,16 @@
-# Shared scene context, palette and UI chrome (status bar, hint bar, log panels).
+# Shared scene context, palette and UI chrome (status line, log panels).
 import datetime
 
 import numpy as np
 
 import timeline as tl
-from term import BARS, SPINNER, gradient, hexc, mix
+from term import SPINNER, gradient, hexc, mix
 
 # Palette (night-terminal base + per-section accents).
 BG = hexc("0a0b12")
 PANEL = hexc("12141f")
 FG = hexc("c8d0f0")
-DIM = hexc("4a5175")
+DIM = hexc("5a628c")
 MUTED = hexc("7a83ad")
 BLUE = hexc("7aa2f7")
 CYAN = hexc("7dcfff")
@@ -73,8 +73,8 @@ class Ctx:
 
 
 def pulse(ctx, every=8, decay=3.0):
-    """1 on each grid hit (every N steps), decaying over `decay` steps."""
-    ph = ctx.b % every
+    """1 on each quarter-note hit (every N steps, on the song's measured phase), decaying over `decay` steps."""
+    ph = (ctx.b - tl.BEAT_PHASE) % every
     return max(0.0, 1 - ph / decay)
 
 
@@ -92,46 +92,18 @@ def clock(beat):
 
 
 def status_bar(s, ctx, accent, label=None, extra=None, alert=False):
+    """One quiet line: recording dot, section name, song time."""
     y = 0
-    s.fill(0, y, s.cols, 1, PANEL)
-    blink = (ctx.bi // 8) % 2 == 0
-    rec_bg = HOTRED if alert else accent
-    s.text(0, y, " ● REC " if blink or alert else " ○ REC ", BG, rec_bg, bold=True)
-    x = 8
-    segs = ["signal-recovery", label or LABEL.get(ctx.sec, ctx.sec)]
+    s.fill(0, y, s.cols, 1, s.base_bg)
+    on = alert or (ctx.b - tl.BEAT_PHASE) % 16 < 8
+    s.put(1, y, "●" if on else "○", HOTRED if alert else accent * 0.8)
+    name = label or LABEL.get(ctx.sec, ctx.sec)
+    s.text(3, y, name, accent * 0.9)
     if extra:
-        segs.append(extra)
-    for i, seg in enumerate(segs):
-        col = accent if i == 1 else MUTED
-        s.text(x, y, " " + seg + " ", col, PANEL, bold=(i == 1))
-        x += len(seg) + 2
-        s.text(x, y, "│", DIM, PANEL)
-        x += 1
+        s.text(4 + len(name), y, "· " + extra, MUTED)
     t = max(ctx.t, 0)
-    bar = int(max(ctx.b - tl.FIRST, 0) // 64) + 1
-    q = int(max(ctx.b - tl.FIRST, 0) // 8) % 8 + 1
-    right = " ♩179  {:03}.{}  {:02}:{:05.2f} ".format(bar, q, int(t // 60), t % 60)
-    s.text(s.cols - len(right), y, right, FG, PANEL)
-    # Beat dots: 8 per two bars.
-    dots = "".join("●" if i == (q - 1) else "·" for i in range(8))
-    s.text(s.cols - len(right) - 10, y, dots, accent, PANEL)
-
-
-def hint_bar(s, ctx, accent, keys=None):
-    y = s.rows - 1
-    s.fill(0, y, s.cols, 1, BG)
-    keys = keys or (("^C", "abort"), ("␣", "hold"), ("⏎", "decode"), ("?", "help"))
-    x = 1
-    for k, v in keys:
-        s.text(x, y, k, accent, bold=True)
-        s.text(x + len(k) + 1, y, v, DIM)
-        x += len(k) + len(v) + 4
-    # Mini spectrum + signal strength.
-    b = ctx.bands()
-    sp = "".join(BARS[int(np.clip(v, 0, 1) * 8)] for v in b[::2])
-    s.text(s.cols - len(sp) - 16, y, sp, lambda i: gradient([accent, WHITE], i / len(sp)))
-    dbm = -72 + 40 * ctx.level
-    s.text(s.cols - 14, y, "rx {:5.1f} dBm".format(dbm), MUTED)
+    right = "{:02}:{:05.2f}".format(int(t // 60), t % 60)
+    s.text(s.cols - len(right) - 1, y, right, MUTED)
 
 
 def wrap(lines, width):

@@ -6,6 +6,7 @@ STEP = 60.0 / BPM / 8.0      # seconds per step (the original's `delay`)
 OFFSET = 5.492               # the original's `offset`
 FIRST = 61                   # the original loop starts at beat -60 and fires one step late
 SONG_LENGTH = 278.8          # Frums - Credits EX
+BEAT_PHASE = 6               # quarter-note hits land on steps where (b - 6) % 8 == 0 (measured from the audio)
 
 
 def beat_time(b):
@@ -38,3 +39,25 @@ def section_at(b):
         if b >= s[0]:
             cur = s
     return cur
+
+
+# Hand-placed signature moments on the song's biggest hits inside sections (beat, length in steps).
+MOMENTS = {
+    "radar_flare": (570, 16),
+    "title_invert": (1722, 16),
+    "funding_freeze": (2618, 14),
+    "carrier_blip": (3066, 10),
+    "crash_collapse": (3706, 32),
+    "lightning": (3963, 14),
+    "tunnel_freeze": (5690, 10),
+    "viewers": (6010, 18),
+    "mosaic": (6202, 16),
+}
+
+
+def moment(name, b):
+    """Progress 0..1 through a signature moment, or None outside it."""
+    start, length = MOMENTS[name]
+    if start <= b < start + length:
+        return (b - start) / length
+    return None

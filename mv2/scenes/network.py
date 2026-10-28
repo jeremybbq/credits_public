@@ -3,8 +3,9 @@ import math
 
 import numpy as np
 
+import timeline as tl
 from lyrics import stream
-from scenes.common import (AMBER, BG, DIM, FG, GREEN, HOTRED, MUTED, PINK, VIOLET, WHITE, hint_bar, input_line,
+from scenes.common import (AMBER, BG, DIM, FG, GREEN, HOTRED, MUTED, PINK, VIOLET, WHITE, input_line,
                            log_panel, status_bar)
 from scenes.forecast import draw_line
 from term import mix
@@ -76,17 +77,17 @@ def network(s, ctx):
 
     # Hub pulse ring.
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
-    ph = (b % 8) / 8
+    ph = ((b - tl.BEAT_PHASE) % 8) / 8
     ring = np.abs(np.hypot((xx - CX * 2) / 2.0, (yy - CY * 4) / 1.0) * 1.0 - ph * 30) < 0.6
     s.braille(0, 1, ring, mix(VIOLET, BG, ph))
 
     # Packets: during a node's slot, one ping every 8 steps travels hub → node.
     if 0 <= searching < N:
-        f = (b % 8) / 8
+        f = ((b - tl.BEAT_PHASE) % 8) / 8
         px, py = _at(_path(searching), f)
         s.put(px, py + 1, "●", WHITE, bold=True)
     if searching > ACTIVE:
-        f = (b % 16) / 16
+        f = ((b - tl.BEAT_PHASE) % 16) / 16
         px, py = _at(_path(ACTIVE), 1 - f)
         s.put(px, py + 1, "●", GREEN, bold=True)
 
@@ -99,7 +100,7 @@ def network(s, ctx):
             elif k == WEAK:
                 g, c, st = "◐", AMBER, "weak"
             else:
-                g, c, st = "✕", HOTRED * 0.8, "no reply"
+                g, c, st = "✕", HOTRED * 0.6, ""
         elif k == searching:
             ping = int((b - SEARCH_FROM - k * SLOT) // 8) + 1
             g = "◎" if (ctx.bi // 2) % 2 else "◌"
@@ -108,7 +109,7 @@ def network(s, ctx):
             g, c, st = "○", DIM, ""
         s.put(x, y, g, c, bold=True)
         lx = x + 2 if x < CX else x - 1 - len(label)
-        s.text(lx, y, label, mix(c, FG, 0.3) if k <= searching else DIM)
+        s.text(lx, y, label, mix(c, FG, 0.3) if (k == searching or k in (ACTIVE, WEAK) and k < searching) else DIM)
         if st:
             s.text(lx, y + 1, st, c * 0.8)
     s.put(CX, CY + 1, "◉", WHITE, bold=True)
@@ -124,4 +125,3 @@ def network(s, ctx):
     input_line(s, 3, 33, 114, st.current(ctx.bi), ctx, PINK)
 
     status_bar(s, ctx, VIOLET, extra="{}/{} searched".format(done, N))
-    hint_bar(s, ctx, VIOLET)

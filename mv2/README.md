@@ -9,16 +9,22 @@ failing more and more as the song goes on.
 | time | section | visual |
 |---|---|---|
 | 0:00 | boot | a shell prompt tunes into `pbs://boston`, carrier lock, braille spinners |
-| 0:05 | forecast | typed NWS forecast, radar sweep over Boston / I-495, braille ocean; "High-igh-igh" glitch-out |
-| 0:48 | title | half-block CREDITS logo, warp starfield, credit lines, live spectrum |
-| 1:20 | funding | btop-style pledge-drive dashboard: broadcast log, weather card, charts, ticker → CONNECTION LOST |
+| 0:05 | forecast | typed NWS forecast in open space, radar over the real Boston coastline / I-495, braille sea; "High-igh-igh" glitch-out |
+| 0:48 | title | a quiet letter-spaced wordmark that decodes in, credit lines, one oscilloscope trace |
+| 1:20 | funding | the broadcast log leads; a small weather card, chart and pledge line beside it → CONNECTION LOST |
 | 2:08 | melt | the dashboard falls apart column by column, then "no carrier" static |
 | 2:14 | reboot | systemd-style boot log, rotating wire globe, `annual_financial_support.dat` download |
 | 2:25 | crash | four tmux panes (stderr / dates / search / hexdump) re-tiling every two bars → THIS IS PBS! |
-| 2:46 | ocean | perspective ASCII sea at night, moon road, Logan Airport observations, METAR |
+| 2:46 | ocean | sparse perspective sea at night, moon road, Logan Airport observations, METAR |
 | 3:10 | network | 24 PBS stations on a radial network, pings travel on the beat, one answers |
-| 3:53 | finale | braille checkerboard tunnel carrying the last lyrics, then flashbacks to earlier scenes |
+| 3:53 | finale | braille tunnel, the lyric word letter-spaced in a quiet band, then flashbacks to earlier scenes |
 | 4:36 | power-off | CRT collapse to a line, a dot, end of transmission |
+
+The look is deliberately restrained: one quiet status line, lyrics as the brightest thing on screen, decoration
+kept dim. Colour and the glitches stay; the big gestures are saved for nine hand-placed moments on the song's
+largest hits (`timeline.MOMENTS`): a radar ping, an inverted wordmark, a frozen broadcast, a carrier blip, the
+crash collapsing to one pane, sheet lightning, a white tunnel freeze, the last line alone on black, and a
+four-scene mosaic.
 
 ## Run
 
@@ -44,6 +50,7 @@ otherwise through `ffplay`.
 - `extract_lyrics.py` runs the original engine headlessly and records what every typewriter shows on every
   beat into `data/lyrics.json`, so the lyrics keep the original's hand-made timing exactly.
 - `timeline.py` is the shared beat grid: 179 BPM in 1/8-beat steps, offset 5.492 s; event numbers match `credits.py`.
+  Quarter-note hits were measured from the audio to fall on steps where `(b - 6) % 8 == 0` (`BEAT_PHASE`).
 - `audio.py` measures loudness, kick / snare hits and a 24-band spectrum per frame; scenes use them for
   flashes, swell and spectrum bars.
 - `term.py` is the screen: a 120x36 grid of cells with glyph + RGB colours, plus drawing tools (rounded
