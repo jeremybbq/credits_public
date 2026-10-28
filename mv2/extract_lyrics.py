@@ -9,6 +9,7 @@ import random
 import sys
 import types
 
+sys.dont_write_bytecode = True  # keep the original project tree clean
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.chdir(ROOT)
